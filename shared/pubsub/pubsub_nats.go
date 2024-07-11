@@ -3,7 +3,7 @@ package pubsub
 import (
 	"encoding/json"
 	"github.com/abdelrahman146/zard/shared/logger"
-	"github.com/abdelrahman146/zard/shared/message"
+	"github.com/abdelrahman146/zard/shared/pubsub/messages"
 	"github.com/nats-io/nats.go"
 	"time"
 )
@@ -15,7 +15,7 @@ type natsPubSub struct {
 }
 
 type NatsPubSubConfig struct {
-	ResendAfter time.Duration // when a message fails to be processed, it will be resent after this duration
+	ResendAfter time.Duration // when a comm fails to be processed, it will be resent after this duration
 	Group       string
 }
 
@@ -33,7 +33,7 @@ func NewNatsPubSub(nc *nats.Conn, config NatsPubSubConfig) PubSub {
 }
 
 func setupStreams(js nats.JetStreamContext) {
-	messages := message.Messages
+	messages := messages.Messages
 	streams := make(map[string][]string)
 	for _, msg := range messages {
 		if msg.Stream() == "" {
@@ -58,7 +58,7 @@ func setupStreams(js nats.JetStreamContext) {
 	}
 }
 
-func (n *natsPubSub) Publish(message message.Message) error {
+func (n *natsPubSub) Publish(message messages.Message) error {
 	data, _ := json.Marshal(message)
 	switch {
 	case message.Stream() == "":
@@ -69,7 +69,7 @@ func (n *natsPubSub) Publish(message message.Message) error {
 	}
 }
 
-func (n *natsPubSub) Subscribe(message message.Message, handler func(received []byte) error) (Subscription, error) {
+func (n *natsPubSub) Subscribe(message messages.Message, handler func(received []byte) error) (Subscription, error) {
 	consumer := message.Consumer(n.config.Group)
 	switch {
 	case message.Stream() == "":

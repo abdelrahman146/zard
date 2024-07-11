@@ -1,4 +1,4 @@
-.PHONY: run build
+.PHONY: run build test test-shared generate-mocks
 
 run:
 	@echo "Running service: $(filter-out $@,$(MAKECMDGOALS))"
@@ -15,3 +15,15 @@ test:
 test-shared:
 	@echo "Running all tests"
 	go test shared/...
+
+SOURCE_DIRS := shared/validator shared/rpc shared/pubsub shared/cache shared/config
+MOCKGEN := mockgen
+generate-mocks:
+	@echo "Generating mocks"
+	@for dir in $(SOURCE_DIRS); do \
+		source_file=$$dir/$$(basename $$dir).go; \
+		mock_file=$$dir/$$(basename $$dir)_mock.go; \
+		package_name=$$(basename $$dir); \
+		$(MOCKGEN) -source=$$source_file -destination=$$mock_file -package=$$package_name; \
+	done
+

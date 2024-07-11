@@ -1,4 +1,4 @@
-package message
+package messages
 
 type Message interface {
 	Stream() string

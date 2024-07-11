@@ -4,8 +4,8 @@ import (
 	"encoding/json"
 	"github.com/abdelrahman146/zard/shared"
 	"github.com/abdelrahman146/zard/shared/logger"
-	"github.com/abdelrahman146/zard/shared/message"
 	"github.com/abdelrahman146/zard/shared/pubsub"
+	"github.com/abdelrahman146/zard/shared/pubsub/messages"
 	"github.com/nats-io/nats.go"
 	"go.uber.org/zap/zapcore"
 	"time"
@@ -29,7 +29,7 @@ func main() {
 		ResendAfter: time.Hour * 2,
 		Group:       "identity",
 	})
-	newActivity := &message.NewActivity{
+	newActivity := &messages.NewActivity{
 		AppID:          "identity",
 		SubscriptionID: "123",
 		Timestamp:      time.Now(),
@@ -41,8 +41,8 @@ func main() {
 	}
 	logger.GetLogger().Info("Published new activity", logger.Field("activity", newActivity))
 	time.Sleep(time.Second * 5)
-	_, err = ps.Subscribe(&message.NewActivity{}, func(received []byte) error {
-		activity := &message.NewActivity{}
+	_, err = ps.Subscribe(&messages.NewActivity{}, func(received []byte) error {
+		activity := &messages.NewActivity{}
 		if err := json.Unmarshal(received, activity); err != nil {
 			logger.GetLogger().Error("Failed to unmarshal new activity", logger.Field("error", err))
 			return err
@@ -51,7 +51,7 @@ func main() {
 		return nil
 	})
 	time.Sleep(time.Second * 5)
-	secondActivity := &message.NewActivity{
+	secondActivity := &messages.NewActivity{
 		AppID:          "identity",
 		SubscriptionID: "456",
 		Timestamp:      time.Now(),
@@ -63,8 +63,8 @@ func main() {
 	}
 	logger.GetLogger().Info("Published second activity", logger.Field("activity", secondActivity))
 	time.Sleep(time.Second * 5)
-	_, err = ps.Subscribe(&message.NewActivity{}, func(received []byte) error {
-		activity := &message.NewActivity{}
+	_, err = ps.Subscribe(&messages.NewActivity{}, func(received []byte) error {
+		activity := &messages.NewActivity{}
 		if err := json.Unmarshal(received, activity); err != nil {
 			logger.GetLogger().Error("Failed to unmarshal second activity", logger.Field("error", err))
 			return err
