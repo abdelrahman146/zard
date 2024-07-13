@@ -23,7 +23,7 @@ func GetEnvConfig(conf Config) {
 	setBulk(conf, "env", envs)
 }
 
-func GetConsulConfig(c *provider.consulProvider, kvPath string, conf Config) error {
+func GetConsulConfig(c provider.ConsulProvider, kvPath string, conf Config) error {
 	client := c.GetClient()
 	kv := client.KV()
 	pair, _, err := kv.Get(kvPath, nil)

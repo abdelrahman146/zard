@@ -10,7 +10,7 @@ import (
 )
 
 type natsPubSub struct {
-	nts    *provider.natsProvider
+	nts    provider.NatsProvider
 	config NatsPubSubConfig
 }
 
@@ -19,7 +19,7 @@ type NatsPubSubConfig struct {
 	Group       string
 }
 
-func NewNatsPubSub(nts *provider.natsProvider, config NatsPubSubConfig) PubSub {
+func NewNatsPubSub(nts provider.NatsProvider, config NatsPubSubConfig) PubSub {
 	setupStreams(nts.GetJs())
 	return &natsPubSub{
 		nts:    nts,

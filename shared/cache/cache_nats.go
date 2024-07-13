@@ -12,7 +12,7 @@ type natsCache struct {
 	config *nats.KeyValueConfig
 }
 
-func NewNatsCache(nts *provider.natsProvider, config *nats.KeyValueConfig) Cache {
+func NewNatsCache(nts provider.NatsProvider, config *nats.KeyValueConfig) Cache {
 	c := &natsCache{
 		config: config,
 	}

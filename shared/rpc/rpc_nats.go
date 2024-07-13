@@ -20,7 +20,7 @@ type NatsRPCConfig struct {
 	Group   string
 }
 
-func NewNatsRPC(nts *provider.natsProvider, v validator.Validator, config NatsRPCConfig) RPC {
+func NewNatsRPC(nts provider.NatsProvider, v validator.Validator, config NatsRPCConfig) RPC {
 	return &natsRPC{
 		nc:     nts.GetConn(),
 		v:      v,
