@@ -2,41 +2,39 @@ package config
 
 import (
 	"encoding/json"
-	"github.com/abdelrahman146/zard/shared/logger"
-	capi "github.com/hashicorp/consul/api"
+	"github.com/abdelrahman146/zard/shared"
+	"github.com/abdelrahman146/zard/shared/provider"
+	"github.com/joho/godotenv"
+	"os"
+	"strings"
 )
 
-func NewConsulConfig(address string) Config {
-	client, err := capi.NewClient(&capi.Config{Address: address})
-	if err != nil {
-		logger.GetLogger().Panic("failed to create consul client", logger.Field("error", err))
+func GetEnvConfig(conf Config) {
+	_ = godotenv.Load()
+	envs := make(map[string]interface{})
+	prefix := "ZARD_"
+	for _, key := range os.Environ() {
+		if strings.HasPrefix(key, prefix) {
+			pair := strings.SplitN(key, "=", 2)
+			pair[0] = strings.TrimPrefix(pair[0], prefix)
+			envs[pair[0]] = shared.Utils.Strings.Parse(pair[1])
+		}
 	}
+	setBulk(conf, "env", envs)
+}
+
+func GetConsulConfig(c *provider.consulProvider, kvPath string, conf Config) error {
+	client := c.GetClient()
 	kv := client.KV()
-	pair, _, err := kv.Get("app", nil)
+	pair, _, err := kv.Get(kvPath, nil)
 	if err != nil {
-		logger.GetLogger().Panic("failed to get config from consul", logger.Field("error", err))
+		return err
 	}
 	var configData map[string]interface{}
 	err = json.Unmarshal(pair.Value, &configData)
 	if err != nil {
-		logger.GetLogger().Panic("failed to unmarshal config data", logger.Field("error", err))
+		return err
 	}
-	viperConfig := NewViperConfig()
-	setConfig(viperConfig, "", configData)
-	return viperConfig
-}
-
-func setConfig(conf Config, prefix string, data map[string]interface{}) {
-	for key, value := range data {
-		fullKey := key
-		if prefix != "" {
-			fullKey = prefix + "." + key
-		}
-		switch v := value.(type) {
-		case map[string]interface{}:
-			setConfig(conf, fullKey, v)
-		default:
-			conf.Set(fullKey, v)
-		}
-	}
+	setBulk(conf, "consul", configData)
+	return nil
 }

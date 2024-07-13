@@ -3,14 +3,14 @@ package pubsub
 import (
 	"encoding/json"
 	"github.com/abdelrahman146/zard/shared/logger"
+	"github.com/abdelrahman146/zard/shared/provider"
 	"github.com/abdelrahman146/zard/shared/pubsub/messages"
 	"github.com/nats-io/nats.go"
 	"time"
 )
 
 type natsPubSub struct {
-	nc     *nats.Conn
-	js     nats.JetStreamContext
+	nts    *provider.natsProvider
 	config NatsPubSubConfig
 }
 
@@ -19,23 +19,18 @@ type NatsPubSubConfig struct {
 	Group       string
 }
 
-func NewNatsPubSub(nc *nats.Conn, config NatsPubSubConfig) PubSub {
-	js, err := nc.JetStream()
-	setupStreams(js)
-	if err != nil {
-		logger.GetLogger().Panic("failed to create jetstream context", logger.Field("error", err))
-	}
+func NewNatsPubSub(nts *provider.natsProvider, config NatsPubSubConfig) PubSub {
+	setupStreams(nts.GetJs())
 	return &natsPubSub{
-		nc:     nc,
-		js:     js,
+		nts:    nts,
 		config: config,
 	}
 }
 
 func setupStreams(js nats.JetStreamContext) {
-	messages := messages.Messages
+	msgs := messages.Messages
 	streams := make(map[string][]string)
-	for _, msg := range messages {
+	for _, msg := range msgs {
 		if msg.Stream() == "" {
 			continue
 		}
@@ -58,22 +53,22 @@ func setupStreams(js nats.JetStreamContext) {
 	}
 }
 
-func (n *natsPubSub) Publish(message messages.Message) error {
+func (p *natsPubSub) Publish(message messages.Message) error {
 	data, _ := json.Marshal(message)
 	switch {
 	case message.Stream() == "":
-		return n.nc.Publish(message.Subject(), data)
+		return p.nts.GetConn().Publish(message.Subject(), data)
 	default:
-		_, err := n.js.Publish(message.Subject(), data)
+		_, err := p.nts.GetJs().Publish(message.Subject(), data)
 		return err
 	}
 }
 
-func (n *natsPubSub) Subscribe(message messages.Message, handler func(received []byte) error) (Subscription, error) {
-	consumer := message.Consumer(n.config.Group)
+func (p *natsPubSub) Subscribe(message messages.Message, handler func(received []byte) error) (Subscription, error) {
+	consumer := message.Consumer(p.config.Group)
 	switch {
 	case message.Stream() == "":
-		sub, err := n.nc.QueueSubscribe(message.Subject(), consumer, func(msg *nats.Msg) {
+		sub, err := p.nts.GetConn().QueueSubscribe(message.Subject(), consumer, func(msg *nats.Msg) {
 			if err := handler(msg.Data); err != nil {
 				_ = msg.Nak()
 			} else {
@@ -82,9 +77,9 @@ func (n *natsPubSub) Subscribe(message messages.Message, handler func(received [
 		})
 		return sub, err
 	default:
-		sub, err := n.js.QueueSubscribe(message.Subject(), consumer, func(natsMsg *nats.Msg) {
+		sub, err := p.nts.GetJs().QueueSubscribe(message.Subject(), consumer, func(natsMsg *nats.Msg) {
 			if err := handler(natsMsg.Data); err != nil {
-				_ = natsMsg.NakWithDelay(n.config.ResendAfter)
+				_ = natsMsg.NakWithDelay(p.config.ResendAfter)
 			} else {
 				_ = natsMsg.Ack()
 			}

@@ -2,6 +2,7 @@ package rpc
 
 import (
 	"encoding/json"
+	"github.com/abdelrahman146/zard/shared/provider"
 	"github.com/abdelrahman146/zard/shared/rpc/requests"
 	"github.com/abdelrahman146/zard/shared/validator"
 	"github.com/nats-io/nats.go"
@@ -19,9 +20,9 @@ type NatsRPCConfig struct {
 	Group   string
 }
 
-func NewNatsRPC(nc *nats.Conn, v validator.Validator, config NatsRPCConfig) RPC {
+func NewNatsRPC(nts *provider.natsProvider, v validator.Validator, config NatsRPCConfig) RPC {
 	return &natsRPC{
-		nc:     nc,
+		nc:     nts.GetConn(),
 		v:      v,
 		config: config,
 	}

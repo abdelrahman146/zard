@@ -2,6 +2,7 @@ package cache
 
 import (
 	"github.com/abdelrahman146/zard/shared/logger"
+	"github.com/abdelrahman146/zard/shared/provider"
 	"github.com/nats-io/nats.go"
 	"strings"
 )
@@ -11,11 +12,11 @@ type natsCache struct {
 	config *nats.KeyValueConfig
 }
 
-func NewNatsCache(nc *nats.Conn, config *nats.KeyValueConfig) Cache {
+func NewNatsCache(nts *provider.natsProvider, config *nats.KeyValueConfig) Cache {
 	c := &natsCache{
 		config: config,
 	}
-	if err := c.init(nc); err != nil {
+	if err := c.init(nts.GetConn()); err != nil {
 		logger.GetLogger().Panic("failed to initialize nats cache", logger.Field("error", err))
 	}
 	return c
