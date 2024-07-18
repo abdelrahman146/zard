@@ -29,7 +29,10 @@ func (c *natsCache) init(nc *nats.Conn) error {
 	}
 	bucket, err := js.KeyValue(c.config.Bucket)
 	if err != nil {
-		bucket, err = js.CreateKeyValue(c.config)
+		bucket, err = js.CreateKeyValue(&nats.KeyValueConfig{
+			Bucket:  c.config.Bucket,
+			Storage: nats.MemoryStorage,
+		})
 		if err != nil {
 			return err
 		}
