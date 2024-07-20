@@ -67,21 +67,37 @@ func (a apiKeyAuth) Authenticate(key string) (claims Claims, err error) {
 		return claims, nil
 	}
 
-	// get token from rpc
+	// get token from db and set in cache
 	claims = &requests.AuthenticateApiKeyResponse{}
-	if resp, err := a.rpc.Request(&requests.AuthenticateApiKeyRequest{}); err != nil {
+	if resp, err := a.rpc.Request(&requests.AuthenticateApiKeyRequest{
+		ApiKey: key,
+	}); err != nil {
 		return nil, UnauthorizedError
 	} else {
+		ttl := time.Duration(a.conf.GetInt("auth.apikey.ttl"))
+		if err := a.cache.Set([]string{"auth", "apikey", key}, resp, time.Second*ttl); err != nil {
+			return nil, err
+		}
 		if err := json.Unmarshal(resp, claims); err != nil {
 			return nil, err
 		}
 	}
+
 	return claims, nil
 }
 
-func (a apiKeyAuth) Revoke(token string) error {
-	//TODO implement me
-	panic("implement me")
+func (a apiKeyAuth) Revoke(key string) error {
+	// remove key from cache
+	if _, err := a.cache.Get([]string{"auth", "apikey", key}); err != nil {
+		return err
+	}
+	// remove key from db
+	if _, err := a.rpc.Request(&requests.RevokeApiKeyRequest{
+		ApiKey: key,
+	}); err != nil {
+		return err
+	}
+	return nil
 }
 
 func NewApiKeyAuth(cache cache.Cache, rpc rpc.RPC, conf config.Config) Auth {

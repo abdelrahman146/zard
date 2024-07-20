@@ -5,6 +5,7 @@ import (
 	"github.com/abdelrahman146/zard/shared/provider"
 	"github.com/nats-io/nats.go"
 	"strings"
+	"time"
 )
 
 type natsCache struct {
@@ -50,7 +51,7 @@ func (c *natsCache) Get(keyPath []string) (value []byte, err error) {
 	return entry.Value(), nil
 }
 
-func (c *natsCache) Set(keyPath []string, value []byte) error {
+func (c *natsCache) Set(keyPath []string, value []byte, ttl time.Duration) error {
 	key := strings.Join(keyPath, ".")
 	_, err := c.bucket.Put(key, value)
 	return err
