@@ -15,7 +15,7 @@ func (r *AuthenticateApiKeyRequest) Consumer(group string) string {
 type AuthenticateApiKeyResponse struct {
 	Org  string   `json:"org"`
 	Ws   string   `json:"workspace"`
-	Subs []string `json:"sub"`
+	Subs []string `json:"subs"`
 }
 
 func (r *AuthenticateApiKeyResponse) AuthType() string {
