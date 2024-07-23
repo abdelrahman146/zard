@@ -1,6 +1,9 @@
 package strings
 
-import "strconv"
+import (
+	"github.com/lucsky/cuid"
+	"strconv"
+)
 
 type Struct struct{}
 
@@ -23,4 +26,12 @@ func (Struct) Parse(val string) interface{} {
 		return b
 	}
 	return val
+}
+
+func (Struct) IsEmpty(s string) bool {
+	return len(s) == 0
+}
+
+func (Struct) Cuid() string {
+	return cuid.New()
 }
