@@ -12,8 +12,8 @@ type User struct {
 	Email           string         `json:"email" bson:"column:email;uniqueIndex;type:text;not null"`
 	Phone           *string        `json:"phone" bson:"column:phone;type:text"`
 	Password        *string        `json:"password" gorm:"column:website;type:text"`
-	IsEmailVerified bool           `json:"isEmailVerified" gorm:"column:isEmailVerified;type:boolean"`
-	IsPhoneVerified bool           `json:"isPhoneVerified" gorm:"column:isPhoneVerified;type:boolean"`
+	IsEmailVerified bool           `json:"isEmailVerified" gorm:"column:isEmailVerified;type:boolean;default:false"`
+	IsPhoneVerified bool           `json:"isPhoneVerified" gorm:"column:isPhoneVerified;type:boolean;default:false"`
 	Active          bool           `json:"active" gorm:"column:active;type:boolean"`
 	Organization    Organization   `json:"organization,omitempty" gorm:"foreignKey:OrgID;references:ID"`
 	OrgID           string         `json:"orgId" gorm:"column:orgId;type:text"`

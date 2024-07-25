@@ -2,15 +2,15 @@
 
 run:
 	@echo "Running service: $(filter-out $@,$(MAKECMDGOALS))"
-	go run services/$(filter-out $@,$(MAKECMDGOALS))/cmd/main.go
+	go run service/$(filter-out $@,$(MAKECMDGOALS))/cmd/main/main.go
 
 build:
 	@echo "Building service: $(filter-out $@,$(MAKECMDGOALS))"
-	go build -o bin/$(filter-out $@,$(MAKECMDGOALS)) services/$(filter-out $@,$(MAKECMDGOALS))/cmd/main.go
+	go build -o bin/$(filter-out $@,$(MAKECMDGOALS)) service/$(filter-out $@,$(MAKECMDGOALS))/cmd/main/main.go
 
 test:
 	@echo "Testing service: $(filter-out $@,$(MAKECMDGOALS))"
-	go test services/$(filter-out $@,$(MAKECMDGOALS))/...
+	go test service/$(filter-out $@,$(MAKECMDGOALS))/...
 
 test-shared:
 	@echo "Running all tests"
