@@ -33,7 +33,7 @@ func NewWorkspaceRepo(db *gorm.DB, conf config.Config) WorkspaceRepo {
 }
 
 func (r *workspaceRepo) generateApiKey(workspace *model.Workspace) {
-	apikey := shared.Utils.Auth.CreateApiKey("zky", workspace.ID, r.conf.GetString("app.secret"))
+	apikey := shared.Utils.Auth.CreateToken("zky", workspace.ID, r.conf.GetString("app.secret"))
 	workspace.ApiKey = shared.Utils.Auth.Encrypt(apikey, r.conf.GetString("app.secret"))
 }
 

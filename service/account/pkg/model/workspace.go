@@ -18,7 +18,7 @@ type Workspace struct {
 
 func (w *Workspace) BeforeCreate(tx *gorm.DB) (err error) {
 	w.ID = "wrk_" + shared.Utils.Strings.Cuid()
-	apikey := shared.Utils.Auth.CreateApiKey("zky", w.ID, "zard") // TODO get from config
-	w.ApiKey = shared.Utils.Auth.Encrypt(apikey, "zard")          // TODO get from config
+	apikey := shared.Utils.Auth.CreateToken("zky", w.ID, "zard") // TODO get from config
+	w.ApiKey = shared.Utils.Auth.Encrypt(apikey, "zard")         // TODO get from config
 	return
 }

@@ -13,7 +13,7 @@ import (
 type Struct struct{}
 
 // Create example output: zky_e4d909c290d0fb1ca068ffaddf22cbd0_c29tZUNoZWNrc3Vt
-func (Struct) CreateApiKey(prefix string, subject string, secret string) string {
+func (Struct) CreateToken(prefix string, subject string, secret string) string {
 	m := md5.New()
 	m.Write([]byte(subject + time.Now().String()))
 	hashBytes := m.Sum(nil)
@@ -26,7 +26,7 @@ func (Struct) CreateApiKey(prefix string, subject string, secret string) string 
 	return key
 }
 
-func (Struct) ValidateApiKey(key string, secret string) (ok bool) {
+func (Struct) ValidateToken(key string, secret string) (ok bool) {
 	parts := strings.Split(key, "_")
 	if len(parts) != 3 {
 		return false
