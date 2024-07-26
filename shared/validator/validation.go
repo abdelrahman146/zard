@@ -37,7 +37,9 @@ func (v *validatorStruct) ValidateStruct(s interface{}) error {
 
 func (v *validatorStruct) GetValidationErrors(err error) map[string]string {
 	var errs validator.ValidationErrors
-	errors.As(err, &errs)
+	if ok := errors.As(err, &errs); !ok {
+		return nil
+	}
 	validations := make(map[string]string)
 	for _, e := range errs {
 		validations[e.Field()] = e.Translate(v.trans)
