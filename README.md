@@ -35,5 +35,3 @@ service will lookup the workspace id from identity and retreive apikey and match
 if valid it will lookup the subscription id from membership 
 if there is subscription to the service and it is active it will allow the request
 and cache key: apikey , value: subscription id. the cache path is <service_name>.apikey.<apikey>
-
-

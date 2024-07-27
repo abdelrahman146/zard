@@ -1,13 +1,14 @@
 package errs
 
-type CustomError interface {
-	error
-	Code() string
-	HttpCode() int
-	Original() error
+type CustomError struct {
+	s        string
+	Desc     string            `json:"desc"`
+	Code     string            `json:"code"`
+	HttpCode int               `json:"httpCode"`
+	Original error             `json:"error,omitempty"`
+	Fields   map[string]string `json:"fields,omitempty"`
 }
 
-type ValidationError interface {
-	CustomError
-	Fields() map[string]string
+func (e CustomError) Error() string {
+	return e.s
 }
