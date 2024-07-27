@@ -18,13 +18,13 @@ type CreateOrgRequest struct {
 }
 
 type UpdateOrgRequest struct {
-	Name    string  `json:"name,omitempty"`
+	Name    *string `json:"name,omitempty"`
 	Website *string `json:"website,omitempty"`
-	Email   string  `json:"email,omitempty" validate:"email"`
+	Email   *string `json:"email,omitempty" validate:"email"`
 	Phone   *string `json:"phone,omitempty" validate:"phone"`
-	Country string  `json:"country,omitempty" validate:"iso3166_1_alpha2"`
-	City    string  `json:"city,omitempty"`
-	Address string  `json:"address,omitempty"`
+	Country *string `json:"country,omitempty" validate:"iso3166_1_alpha2"`
+	City    *string `json:"city,omitempty"`
+	Address *string `json:"address,omitempty"`
 }
 
 type OrgUseCase interface {
@@ -74,26 +74,26 @@ func (u orgUseCase) UpdateOrg(id string, orgDto UpdateOrgRequest) (*model.Organi
 	if err != nil {
 		return nil, errs.NewNotFoundError("Organization not found", err)
 	}
-	if orgDto.Name != "" {
-		org.Name = orgDto.Name
+	if orgDto.Name != nil {
+		org.Name = *orgDto.Name
 	}
 	if orgDto.Website != nil {
 		org.Website = orgDto.Website
 	}
-	if orgDto.Email != "" {
-		org.Email = orgDto.Email
+	if orgDto.Email != nil {
+		org.Email = *orgDto.Email
 	}
 	if orgDto.Phone != nil {
 		org.Phone = orgDto.Phone
 	}
-	if orgDto.Country != "" {
-		org.Country = orgDto.Country
+	if orgDto.Country != nil {
+		org.Country = *orgDto.Country
 	}
-	if orgDto.City != "" {
-		org.City = orgDto.City
+	if orgDto.City != nil {
+		org.City = *orgDto.City
 	}
-	if orgDto.Address != "" {
-		org.Address = orgDto.Address
+	if orgDto.Address != nil {
+		org.Address = *orgDto.Address
 	}
 	if err := u.orgRepo.Update(org); err != nil {
 		return nil, errs.NewInternalError("failed to update organization", err)
