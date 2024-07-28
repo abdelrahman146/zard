@@ -10,7 +10,7 @@ import (
 type WorkspaceRepo interface {
 	Create(workspace *model.Workspace) error
 	Save(workspace *model.Workspace) error
-	ResetApiKey(id string) error
+	ResetApiKey(id string) (*model.Workspace, error)
 	Delete(id string) error
 	GetOneByID(id string) (*model.Workspace, error)
 	GetOneByApiKey(apiKey string) (*model.Workspace, error)
@@ -54,10 +54,17 @@ func (r *workspaceRepo) Save(workspace *model.Workspace) error {
 	return r.db.Save(workspace).Error
 }
 
-func (r *workspaceRepo) ResetApiKey(id string) error {
-	workspace := &model.Workspace{ID: id}
+func (r *workspaceRepo) ResetApiKey(id string) (*model.Workspace, error) {
+	workspace, err := r.GetOneByID(id)
+	if err != nil {
+		return nil, err
+	}
 	r.generateApiKey(workspace)
-	return r.db.Model(workspace).Updates(workspace).Error
+	err = r.Save(workspace)
+	if err != nil {
+		return nil, err
+	}
+	return workspace, nil
 }
 
 func (r *workspaceRepo) Delete(id string) error {
