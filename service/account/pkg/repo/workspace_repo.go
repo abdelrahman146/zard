@@ -8,8 +8,8 @@ import (
 )
 
 type WorkspaceRepo interface {
-	Insert(workspace *model.Workspace) error
-	Update(workspace *model.Workspace) error
+	Create(workspace *model.Workspace) error
+	Save(workspace *model.Workspace) error
 	ResetApiKey(id string) error
 	Delete(id string) error
 	GetOneByID(id string) (*model.Workspace, error)
@@ -45,12 +45,12 @@ func (r *workspaceRepo) encryptApiKey(apiKey string) string {
 	return shared.Utils.Auth.Encrypt(apiKey, r.conf.GetString("app.secret"))
 }
 
-func (r *workspaceRepo) Insert(workspace *model.Workspace) error {
+func (r *workspaceRepo) Create(workspace *model.Workspace) error {
 	r.generateApiKey(workspace)
 	return r.db.Create(workspace).Error
 }
 
-func (r *workspaceRepo) Update(workspace *model.Workspace) error {
+func (r *workspaceRepo) Save(workspace *model.Workspace) error {
 	return r.db.Save(workspace).Error
 }
 

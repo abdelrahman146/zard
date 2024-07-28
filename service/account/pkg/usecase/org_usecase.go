@@ -16,6 +16,7 @@ type OrgUseCase interface {
 	GetOrgByUserID(userID string) (*model.Organization, error)
 	GetOrgByWorkspaceID(workspaceID string) (*model.Organization, error)
 	GetAll(page int, limit int) (*shared.List[model.Organization], error)
+	Search(keyword string, page int, limit int) (*shared.List[model.Organization], error)
 }
 
 func NewOrgUseCase(toolkit shared.Toolkit, orgRepo repo.OrgRepo, userRepo repo.UserRepo, workspaceRepo repo.WorkspaceRepo) OrgUseCase {
@@ -34,9 +35,9 @@ type orgUseCase struct {
 	workspaceRepo repo.WorkspaceRepo
 }
 
-func (u orgUseCase) CreateOrg(orgDto CreateOrgStruct) (*model.Organization, error) {
-	if err := u.toolkit.Validator.ValidateStruct(orgDto); err != nil {
-		fields := u.toolkit.Validator.GetValidationErrors(err)
+func (uc *orgUseCase) CreateOrg(orgDto CreateOrgStruct) (*model.Organization, error) {
+	if err := uc.toolkit.Validator.ValidateStruct(orgDto); err != nil {
+		fields := uc.toolkit.Validator.GetValidationErrors(err)
 		return nil, errs.NewValidationError("invalid organization data", fields)
 	}
 	org := &model.Organization{
@@ -48,18 +49,18 @@ func (u orgUseCase) CreateOrg(orgDto CreateOrgStruct) (*model.Organization, erro
 		City:    orgDto.City,
 		Address: orgDto.Address,
 	}
-	if err := u.orgRepo.Insert(org); err != nil {
+	if err := uc.orgRepo.Create(org); err != nil {
 		return nil, errs.NewInternalError("failed to create organization", err)
 	}
 	return org, nil
 }
 
-func (u orgUseCase) UpdateOrg(id string, orgDto UpdateOrgStruct) (*model.Organization, error) {
-	if err := u.toolkit.Validator.ValidateStruct(orgDto); err != nil {
-		fields := u.toolkit.Validator.GetValidationErrors(err)
+func (uc *orgUseCase) UpdateOrg(id string, orgDto UpdateOrgStruct) (*model.Organization, error) {
+	if err := uc.toolkit.Validator.ValidateStruct(orgDto); err != nil {
+		fields := uc.toolkit.Validator.GetValidationErrors(err)
 		return nil, errs.NewValidationError("invalid organization data", fields)
 	}
-	org, err := u.orgRepo.GetOneByID(id)
+	org, err := uc.orgRepo.GetOneByID(id)
 	if err != nil {
 		return nil, errs.NewNotFoundError("Organization not found", err)
 	}
@@ -84,63 +85,76 @@ func (u orgUseCase) UpdateOrg(id string, orgDto UpdateOrgStruct) (*model.Organiz
 	if orgDto.Address != nil {
 		org.Address = *orgDto.Address
 	}
-	if err := u.orgRepo.Update(org); err != nil {
+	if err := uc.orgRepo.Save(org); err != nil {
 		return nil, errs.NewInternalError("failed to update organization", err)
 	}
 	return org, nil
 }
 
-func (u orgUseCase) DeleteOrg(id string) error {
-	if err := u.orgRepo.Delete(id); err != nil {
+func (uc *orgUseCase) DeleteOrg(id string) error {
+	if err := uc.orgRepo.Delete(id); err != nil {
 		return errs.NewInternalError("failed to delete organization", err)
 	}
 	return nil
 }
 
-func (u orgUseCase) GetOrgByID(id string) (*model.Organization, error) {
-	org, err := u.orgRepo.GetOneByID(id)
+func (uc *orgUseCase) GetOrgByID(id string) (*model.Organization, error) {
+	org, err := uc.orgRepo.GetOneByID(id)
 	if err != nil {
 		return nil, errs.NewNotFoundError("Organization not found", err)
 	}
 	return org, nil
 }
 
-func (u orgUseCase) GetOrgByEmail(email string) (*model.Organization, error) {
-	org, err := u.orgRepo.GetOneByEmail(email)
+func (uc *orgUseCase) GetOrgByEmail(email string) (*model.Organization, error) {
+	org, err := uc.orgRepo.GetOneByEmail(email)
 	if err != nil {
 		return nil, errs.NewNotFoundError("Organization not found", err)
 	}
 	return org, nil
 }
 
-func (u orgUseCase) GetOrgByUserID(userID string) (*model.Organization, error) {
-	user, err := u.userRepo.GetOneByID(userID)
+func (uc *orgUseCase) GetOrgByUserID(userID string) (*model.Organization, error) {
+	user, err := uc.userRepo.GetOneByID(userID)
 	if err != nil {
 		return nil, errs.NewNotFoundError("User not found", err)
 	}
-	org, err := u.orgRepo.GetOneByID(user.OrgID)
+	org, err := uc.orgRepo.GetOneByID(user.OrgID)
 	if err != nil {
 		return nil, errs.NewNotFoundError("Failed to get organization", err)
 	}
 	return org, nil
 }
 
-func (u orgUseCase) GetOrgByWorkspaceID(workspaceID string) (*model.Organization, error) {
-	workspace, err := u.workspaceRepo.GetOneByID(workspaceID)
+func (uc *orgUseCase) GetOrgByWorkspaceID(workspaceID string) (*model.Organization, error) {
+	workspace, err := uc.workspaceRepo.GetOneByID(workspaceID)
 	if err != nil {
 		return nil, errs.NewNotFoundError("Workspace not found", err)
 	}
-	org, err := u.orgRepo.GetOneByID(workspace.OrgID)
+	org, err := uc.orgRepo.GetOneByID(workspace.OrgID)
 	if err != nil {
 		return nil, errs.NewNotFoundError("Failed to get organization", err)
 	}
 	return org, nil
 }
 
-func (u orgUseCase) GetAll(page int, limit int) (*shared.List[model.Organization], error) {
-	orgs, total, err := u.orgRepo.GetAll(page, limit)
+func (uc *orgUseCase) GetAll(page int, limit int) (*shared.List[model.Organization], error) {
+	orgs, total, err := uc.orgRepo.GetAll(page, limit)
 	if err != nil {
 		return nil, errs.NewInternalError("Failed to get organizations", err)
+	}
+	return &shared.List[model.Organization]{
+		Items: orgs,
+		Page:  page,
+		Limit: limit,
+		Total: total,
+	}, nil
+}
+
+func (uc *orgUseCase) Search(keyword string, page int, limit int) (*shared.List[model.Organization], error) {
+	orgs, total, err := uc.orgRepo.Search(keyword, page, limit)
+	if err != nil {
+		return nil, errs.NewInternalError("Failed to search organizations", err)
 	}
 	return &shared.List[model.Organization]{
 		Items: orgs,

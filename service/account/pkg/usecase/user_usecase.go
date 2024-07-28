@@ -12,19 +12,21 @@ import (
 
 type UserUseCase interface {
 	CreateUser(userDto *CreateUserStruct) (*UserStruct, error)
-	UpdateUserName(id string, name string) (*UserStruct, error)
+	UpdateUser(id string, userDto *UpdateUserStruct) (*UserStruct, error)
 	UpdateUserEmail(id string, email string) (*UserStruct, error)
 	UpdateUserPhone(id string, phone string) (*UserStruct, error)
 	UpdateUserPassword(id string, password string) (*UserStruct, error)
-	SetUserActivated(id string, active bool) (*UserStruct, error)
+	DeactivateUser(id string) (*UserStruct, error)
+	ActivateUser(id string) (*UserStruct, error)
 	SetUserEmailVerified(id string, verified bool) (*UserStruct, error)
 	SetUserPhoneVerified(id string, verified bool) (*UserStruct, error)
 	DeleteUser(id string) error
 	GetUserByID(id string) (*UserStruct, error)
 	GetUserByEmail(email string) (*UserStruct, error)
 	GetUserByPhone(phone string) (*UserStruct, error)
-	GetAll(page int, limit int) (*shared.List[model.User], error)
-	GetUsersByOrgID(orgID string, page int, limit int) (*shared.List[model.User], error)
+	GetAll(page int, limit int) (*shared.List[UserStruct], error)
+	GetUsersByOrgID(orgID string, page int, limit int) (*shared.List[UserStruct], error)
+	Search(keyword string, page int, limit int) (*shared.List[UserStruct], error)
 }
 
 func NewUserUseCase(toolkit shared.Toolkit, userRepo repo.UserRepo) UserUseCase {
@@ -55,6 +57,14 @@ func (uc *userUseCase) ToUserStruct(user *model.User) *UserStruct {
 	}
 }
 
+func (uc *userUseCase) ToUserStructList(users []model.User) []UserStruct {
+	var userStructList []UserStruct
+	for _, user := range users {
+		userStructList = append(userStructList, *uc.ToUserStruct(&user))
+	}
+	return userStructList
+}
+
 func (uc *userUseCase) CreateUser(userDto *CreateUserStruct) (*UserStruct, error) {
 	if err := uc.toolkit.Validator.ValidateStruct(userDto); err != nil {
 		fields := uc.toolkit.Validator.GetValidationErrors(err)
@@ -70,7 +80,7 @@ func (uc *userUseCase) CreateUser(userDto *CreateUserStruct) (*UserStruct, error
 		Active:          true,
 		OrgID:           userDto.OrgID,
 	}
-	if err := uc.userRepo.Insert(user); err != nil {
+	if err := uc.userRepo.Create(user); err != nil {
 		return nil, errs.NewInternalError("failed to create user", err)
 	}
 	userCreatedMessage := &messages.UserCreatedMessage{
@@ -85,13 +95,20 @@ func (uc *userUseCase) CreateUser(userDto *CreateUserStruct) (*UserStruct, error
 	return uc.ToUserStruct(user), nil
 }
 
-func (uc *userUseCase) UpdateUserName(id string, name string) (*UserStruct, error) {
+func (uc *userUseCase) UpdateUser(id string, userDto *UpdateUserStruct) (*UserStruct, error) {
+	if err := uc.toolkit.Validator.ValidateStruct(userDto); err != nil {
+		fields := uc.toolkit.Validator.GetValidationErrors(err)
+		return nil, errs.NewValidationError("invalid user data", fields)
+	}
 	user, err := uc.userRepo.GetOneByID(id)
 	if err != nil {
 		return nil, errs.NewNotFoundError("User not found", err)
 	}
-	if err := uc.userRepo.UpdateName(id, name); err != nil {
-		return nil, errs.NewInternalError("failed to update user name", err)
+	if userDto.Name != nil {
+		user.Name = *userDto.Name
+	}
+	if err := uc.userRepo.Save(user); err != nil {
+		return nil, errs.NewInternalError("failed to update user", err)
 	}
 	return uc.ToUserStruct(user), nil
 }
@@ -104,8 +121,144 @@ func (uc *userUseCase) UpdateUserEmail(id string, email string) (*UserStruct, er
 	if user.Email == email {
 		return uc.ToUserStruct(user), nil
 	}
-	if err := uc.userRepo.UpdateEmail(id, email); err != nil {
-		return nil, errs.NewInternalError("failed to update user email", err)
+	user.Email = email
+	user.IsEmailVerified = false
+	if err := uc.userRepo.Save(user); err != nil {
+		return nil, errs.NewInternalError("failed to update user", err)
 	}
 	return uc.ToUserStruct(user), nil
+}
+
+func (uc *userUseCase) UpdateUserPhone(id string, phone string) (*UserStruct, error) {
+	user, err := uc.userRepo.GetOneByID(id)
+	if err != nil {
+		return nil, errs.NewNotFoundError("User not found", err)
+	}
+	if user.Phone != nil && *user.Phone == phone {
+		return uc.ToUserStruct(user), nil
+	}
+	user.Phone = &phone
+	user.IsPhoneVerified = false
+	if err := uc.userRepo.Save(user); err != nil {
+		return nil, errs.NewInternalError("failed to update user", err)
+	}
+	return uc.ToUserStruct(user), nil
+}
+
+func (uc *userUseCase) UpdateUserPassword(id string, password string) (*UserStruct, error) {
+	user, err := uc.userRepo.GetOneByID(id)
+	if err != nil {
+		return nil, errs.NewNotFoundError("User not found", err)
+	}
+	if err := uc.userRepo.UpdatePassword(id, password); err != nil {
+		return nil, errs.NewInternalError("failed to update user", err)
+	}
+	return uc.ToUserStruct(user), nil
+}
+
+func (uc *userUseCase) DeactivateUser(id string) (*UserStruct, error) {
+	user, err := uc.userRepo.GetOneByID(id)
+	if err != nil {
+		return nil, errs.NewNotFoundError("User not found", err)
+	}
+	user.Active = false
+	if err := uc.userRepo.Save(user); err != nil {
+		return nil, errs.NewInternalError("failed to update user", err)
+	}
+	return uc.ToUserStruct(user), nil
+}
+
+func (uc *userUseCase) ActivateUser(id string) (*UserStruct, error) {
+	user, err := uc.userRepo.GetOneByID(id)
+	if err != nil {
+		return nil, errs.NewNotFoundError("User not found", err)
+	}
+	user.Active = true
+	if err := uc.userRepo.Save(user); err != nil {
+		return nil, errs.NewInternalError("failed to update user", err)
+	}
+	return uc.ToUserStruct(user), nil
+}
+
+func (uc *userUseCase) SetUserEmailVerified(id string, verified bool) (*UserStruct, error) {
+	user, err := uc.userRepo.GetOneByID(id)
+	if err != nil {
+		return nil, errs.NewNotFoundError("User not found", err)
+	}
+	user.IsEmailVerified = verified
+	if err := uc.userRepo.Save(user); err != nil {
+		return nil, errs.NewInternalError("failed to update user", err)
+	}
+	return uc.ToUserStruct(user), nil
+}
+
+func (uc *userUseCase) SetUserPhoneVerified(id string, verified bool) (*UserStruct, error) {
+	user, err := uc.userRepo.GetOneByID(id)
+	if err != nil {
+		return nil, errs.NewNotFoundError("User not found", err)
+	}
+	user.IsPhoneVerified = verified
+	if err := uc.userRepo.Save(user); err != nil {
+		return nil, errs.NewInternalError("failed to update user", err)
+	}
+	return uc.ToUserStruct(user), nil
+}
+
+func (uc *userUseCase) DeleteUser(id string) error {
+	_, err := uc.userRepo.GetOneByID(id)
+	if err != nil {
+		return errs.NewNotFoundError("User not found", err)
+	}
+	return uc.userRepo.Delete(id)
+}
+
+func (uc *userUseCase) GetUserByID(id string) (*UserStruct, error) {
+	user, err := uc.userRepo.GetOneByID(id)
+	if err != nil {
+		return nil, errs.NewNotFoundError("User not found", err)
+	}
+	return uc.ToUserStruct(user), nil
+}
+
+func (uc *userUseCase) GetUserByEmail(email string) (*UserStruct, error) {
+	user, err := uc.userRepo.GetOneByEmail(email)
+	if err != nil {
+		return nil, errs.NewNotFoundError("User not found", err)
+	}
+	return uc.ToUserStruct(user), nil
+}
+
+func (uc *userUseCase) GetUserByPhone(phone string) (*UserStruct, error) {
+	user, err := uc.userRepo.GetOneByPhone(phone)
+	if err != nil {
+		return nil, errs.NewNotFoundError("User not found", err)
+	}
+	return uc.ToUserStruct(user), nil
+}
+
+func (uc *userUseCase) GetAll(page int, limit int) (*shared.List[UserStruct], error) {
+	users, total, err := uc.userRepo.GetAll(page, limit)
+	if err != nil {
+		return nil, errs.NewInternalError("failed to get users", err)
+	}
+	userList := uc.ToUserStructList(users)
+	return &shared.List[UserStruct]{Items: userList, Total: total, Page: page, Limit: limit}, nil
+}
+
+func (uc *userUseCase) GetUsersByOrgID(orgID string, page int, limit int) (*shared.List[UserStruct], error) {
+	users, total, err := uc.userRepo.GetAllByOrgID(orgID, page, limit)
+	if err != nil {
+		return nil, errs.NewInternalError("failed to get users", err)
+	}
+	userList := uc.ToUserStructList(users)
+	return &shared.List[UserStruct]{Items: userList, Total: total, Page: page, Limit: limit}, nil
+}
+
+func (uc *userUseCase) Search(keyword string, page int, limit int) (*shared.List[UserStruct], error) {
+	users, total, err := uc.userRepo.Search(keyword, page, limit)
+	if err != nil {
+		return nil, errs.NewInternalError("failed to search users", err)
+	}
+	userList := uc.ToUserStructList(users)
+	return &shared.List[UserStruct]{Items: userList, Total: total, Page: page, Limit: limit}, nil
 }

@@ -7,8 +7,8 @@ import (
 )
 
 type OrgRepo interface {
-	Insert(org *model.Organization) error
-	Update(org *model.Organization) error
+	Create(org *model.Organization) error
+	Save(org *model.Organization) error
 	Delete(id string) error
 	GetOneByID(id string) (*model.Organization, error)
 	GetOneByName(name string) (*model.Organization, error)
@@ -30,11 +30,11 @@ func NewOrgRepo(db *gorm.DB, conf config.Config) OrgRepo {
 	}
 }
 
-func (r *orgRepo) Insert(org *model.Organization) error {
+func (r *orgRepo) Create(org *model.Organization) error {
 	return r.db.Create(org).Error
 }
 
-func (r *orgRepo) Update(org *model.Organization) error {
+func (r *orgRepo) Save(org *model.Organization) error {
 	return r.db.Save(org).Error
 }
 
