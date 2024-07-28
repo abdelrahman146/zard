@@ -1,6 +1,7 @@
 package cache
 
 import (
+	"context"
 	"github.com/abdelrahman146/zard/shared/logger"
 	"github.com/abdelrahman146/zard/shared/provider"
 	"github.com/nats-io/nats.go"
@@ -62,6 +63,31 @@ func (c *natsCache) Delete(keyPath []string) error {
 	return c.bucket.Delete(key)
 }
 
-func (c *natsCache) Keys() (keys []string, err error) {
-	return c.bucket.Keys()
+func (c *natsCache) Keys(keyPath []string) ([]string, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	pathPrefix := strings.Join(keyPath, ".")
+	lister, err := c.bucket.ListKeys()
+	if err != nil {
+		return nil, err
+	}
+	defer func(lister nats.KeyLister) {
+		err := lister.Stop()
+		if err != nil {
+			logger.GetLogger().Error("failed to stop key lister", logger.Field("error", err))
+		}
+	}(lister)
+
+	var keys []string
+
+	for {
+		select {
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		case key := <-lister.Keys():
+			if len(pathPrefix) == 0 || len(key) >= len(pathPrefix) && key[:len(pathPrefix)] == pathPrefix {
+				keys = append(keys, key)
+			}
+		}
+	}
 }

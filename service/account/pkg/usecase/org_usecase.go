@@ -7,35 +7,24 @@ import (
 	"github.com/abdelrahman146/zard/shared/errs"
 )
 
-type CreateOrgRequest struct {
-	Name    string  `json:"name,omitempty" validate:"required,omitempty"`
-	Website *string `json:"website,omitempty"`
-	Email   string  `json:"email,omitempty" validate:"required,email"`
-	Phone   *string `json:"phone,omitempty" validate:"phone"`
-	Country string  `json:"country,omitempty" validate:"required,omitempty,iso3166_1_alpha2"`
-	City    string  `json:"city,omitempty" validate:"required,omitempty"`
-	Address string  `json:"address,omitempty" validate:"required,omitempty"`
-}
-
-type UpdateOrgRequest struct {
-	Name    *string `json:"name,omitempty"`
-	Website *string `json:"website,omitempty"`
-	Email   *string `json:"email,omitempty" validate:"email"`
-	Phone   *string `json:"phone,omitempty" validate:"phone"`
-	Country *string `json:"country,omitempty" validate:"iso3166_1_alpha2"`
-	City    *string `json:"city,omitempty"`
-	Address *string `json:"address,omitempty"`
-}
-
 type OrgUseCase interface {
-	CreateOrg(orgDto CreateOrgRequest) (*model.Organization, error)
-	UpdateOrg(id string, orgDto UpdateOrgRequest) (*model.Organization, error)
+	CreateOrg(orgDto CreateOrgStruct) (*model.Organization, error)
+	UpdateOrg(id string, orgDto UpdateOrgStruct) (*model.Organization, error)
 	DeleteOrg(id string) error
 	GetOrgByID(id string) (*model.Organization, error)
 	GetOrgByEmail(email string) (*model.Organization, error)
 	GetOrgByUserID(userID string) (*model.Organization, error)
 	GetOrgByWorkspaceID(workspaceID string) (*model.Organization, error)
 	GetAll(page int, limit int) (*shared.List[model.Organization], error)
+}
+
+func NewOrgUseCase(toolkit shared.Toolkit, orgRepo repo.OrgRepo, userRepo repo.UserRepo, workspaceRepo repo.WorkspaceRepo) OrgUseCase {
+	return &orgUseCase{
+		toolkit:       toolkit,
+		orgRepo:       orgRepo,
+		userRepo:      userRepo,
+		workspaceRepo: workspaceRepo,
+	}
 }
 
 type orgUseCase struct {
@@ -45,7 +34,7 @@ type orgUseCase struct {
 	workspaceRepo repo.WorkspaceRepo
 }
 
-func (u orgUseCase) CreateOrg(orgDto CreateOrgRequest) (*model.Organization, error) {
+func (u orgUseCase) CreateOrg(orgDto CreateOrgStruct) (*model.Organization, error) {
 	if err := u.toolkit.Validator.ValidateStruct(orgDto); err != nil {
 		fields := u.toolkit.Validator.GetValidationErrors(err)
 		return nil, errs.NewValidationError("invalid organization data", fields)
@@ -65,7 +54,7 @@ func (u orgUseCase) CreateOrg(orgDto CreateOrgRequest) (*model.Organization, err
 	return org, nil
 }
 
-func (u orgUseCase) UpdateOrg(id string, orgDto UpdateOrgRequest) (*model.Organization, error) {
+func (u orgUseCase) UpdateOrg(id string, orgDto UpdateOrgStruct) (*model.Organization, error) {
 	if err := u.toolkit.Validator.ValidateStruct(orgDto); err != nil {
 		fields := u.toolkit.Validator.GetValidationErrors(err)
 		return nil, errs.NewValidationError("invalid organization data", fields)
@@ -159,13 +148,4 @@ func (u orgUseCase) GetAll(page int, limit int) (*shared.List[model.Organization
 		Limit: limit,
 		Total: total,
 	}, nil
-}
-
-func NewOrgUseCase(toolkit shared.Toolkit, orgRepo repo.OrgRepo, userRepo repo.UserRepo, workspaceRepo repo.WorkspaceRepo) OrgUseCase {
-	return &orgUseCase{
-		toolkit:       toolkit,
-		orgRepo:       orgRepo,
-		userRepo:      userRepo,
-		workspaceRepo: workspaceRepo,
-	}
 }

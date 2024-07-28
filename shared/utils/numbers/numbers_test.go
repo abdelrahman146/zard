@@ -48,6 +48,8 @@ func TestStruct_GenerateRandomDigits(t *testing.T) {
 			n := Struct{}
 			if got, _ := n.GenerateRandomDigits(tt.args.digits); !tt.validate(got) {
 				t.Errorf("Struct.GenerateRandomDigits() = %v, want %v", got, tt.want)
+			} else {
+				t.Log("GenerateRandomDigits(): ", "args", tt.args, "got", got)
 			}
 		})
 	}

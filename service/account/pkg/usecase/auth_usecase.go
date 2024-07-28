@@ -7,36 +7,18 @@ import (
 	"github.com/abdelrahman146/zard/shared"
 	"github.com/abdelrahman146/zard/shared/errs"
 	"github.com/abdelrahman146/zard/shared/pubsub/messages"
-	"gorm.io/gorm"
+	"strconv"
 	"time"
 )
 
-type UserResponse struct {
-	ID              string         `json:"id"`
-	Name            string         `json:"name"`
-	Email           string         `json:"email"`
-	Phone           *string        `json:"phone"`
-	IsEmailVerified bool           `json:"isEmailVerified"`
-	IsPhoneVerified bool           `json:"isPhoneVerified"`
-	Active          bool           `json:"active"`
-	OrgID           string         `json:"orgId"`
-	CreatedAt       time.Time      `json:"createdAt"`
-	UpdatedAt       time.Time      `json:"updatedAt"`
-	DeletedAt       gorm.DeletedAt `json:"deletedAt"`
-}
-
 type AuthUseCase interface {
-	AuthenticateUserByEmailPassword(email, password string) (token string, user *UserResponse, err error)
-	SendMagicLink(email string, withReset bool) error
-	AuthenticateWithMagicLink(magiclinkToken string) (token string, user *UserResponse, err error)
-	AuthenticateToken(token string) (user *UserResponse, err error)
+	AuthenticateUserByEmailPassword(email, password string) (token string, user *UserStruct, err error)
+	CreateAndSendOTP(target, value string) (err error)
+	VerifyOTP(expectedVal, otp string) (err error)
+	AuthenticateToken(token string) (user *UserStruct, err error)
 	AuthenticateWorkspaceByApiKey(apiKey string) (id string, err error)
-}
-
-type authUseCase struct {
-	toolkit  shared.Toolkit
-	userRepo repo.UserRepo
-	wrkRepo  repo.WorkspaceRepo
+	RevokeToken(token string) (err error)
+	RevokeAllUserTokens(userID string) (err error)
 }
 
 func NewAuthUseCase(toolkit shared.Toolkit, userRepo repo.UserRepo, wrkRepo repo.WorkspaceRepo) AuthUseCase {
@@ -47,14 +29,20 @@ func NewAuthUseCase(toolkit shared.Toolkit, userRepo repo.UserRepo, wrkRepo repo
 	}
 }
 
-func (uc *authUseCase) createUserSession(userModel *model.User) (token string, user *UserResponse, err error) {
+type authUseCase struct {
+	toolkit  shared.Toolkit
+	userRepo repo.UserRepo
+	wrkRepo  repo.WorkspaceRepo
+}
+
+func (uc *authUseCase) createUserSession(userModel *model.User) (token string, user *UserStruct, err error) {
 	userJson, _ := json.Marshal(userModel)
 	token = shared.Utils.Auth.CreateToken("ztkn", userModel.ID, uc.toolkit.Conf.GetString("app.secret"))
 	ttl := time.Second * time.Duration(uc.toolkit.Conf.GetInt("app.auth.tokenTTL"))
 	if err := uc.toolkit.Cache.Set([]string{"account", "auth", "user", "tokens", token}, userJson, ttl); err != nil {
 		return "", nil, errs.NewInternalError("unable to create user session", err)
 	}
-	user = &UserResponse{
+	user = &UserStruct{
 		ID:              userModel.ID,
 		Name:            userModel.Name,
 		Email:           userModel.Email,
@@ -70,7 +58,7 @@ func (uc *authUseCase) createUserSession(userModel *model.User) (token string, u
 	return token, user, nil
 }
 
-func (uc *authUseCase) AuthenticateUserByEmailPassword(email, password string) (token string, user *UserResponse, err error) {
+func (uc *authUseCase) AuthenticateUserByEmailPassword(email, password string) (token string, user *UserStruct, err error) {
 	userModel, err := uc.userRepo.GetOneByEmail(email)
 	if err != nil {
 		return "", nil, errs.NewBadRequestError("invalid email", err)
@@ -87,7 +75,43 @@ func (uc *authUseCase) AuthenticateUserByEmailPassword(email, password string) (
 	return uc.createUserSession(userModel)
 }
 
-func (uc *authUseCase) AuthenticateToken(token string) (user *UserResponse, err error) {
+func (uc *authUseCase) CreateAndSendOTP(target, value string) (err error) {
+	otpNum, err := shared.Utils.Numbers.GenerateRandomDigits(6)
+	if err != nil {
+		return errs.NewInternalError("Unable to create otp", err)
+	}
+	otp := strconv.Itoa(otpNum)
+	ttl := time.Duration(uc.toolkit.Conf.GetInt("app.auth.otpTTL"))
+	if err = uc.toolkit.Cache.Set([]string{"account", "auth", "otp", otp}, []byte(value), ttl); err != nil {
+		return errs.NewInternalError("unable to create otp", err)
+	}
+	if err := uc.toolkit.PubSub.Publish(&messages.AuthOTPCreated{
+		Value:     value,
+		Target:    target,
+		Otp:       otp,
+		Ttl:       ttl,
+		Timestamp: time.Now(),
+	}); err != nil {
+		return errs.NewInternalError("Unable to publish otp created message", err)
+	}
+	return nil
+}
+
+func (uc *authUseCase) VerifyOTP(expectedVal, otp string) (err error) {
+	value, err := uc.toolkit.Cache.Get([]string{"account", "auth", "otp", otp})
+	if err != nil {
+		return errs.NewUnauthorizedError("invalid or expired otp", err)
+	}
+	if string(value) != expectedVal {
+		return errs.NewUnauthorizedError("invalid otp", nil)
+	}
+	if err = uc.toolkit.Cache.Delete([]string{"account", "auth", "otp", otp}); err != nil {
+		return errs.NewInternalError("unable to delete otp", err)
+	}
+	return nil
+}
+
+func (uc *authUseCase) AuthenticateToken(token string) (user *UserStruct, err error) {
 	userJson, err := uc.toolkit.Cache.Get([]string{"account", "auth", "user", "tokens", token})
 	if err != nil {
 		return nil, errs.NewUnauthorizedError("invalid or expired token", err)
@@ -96,42 +120,6 @@ func (uc *authUseCase) AuthenticateToken(token string) (user *UserResponse, err 
 		return nil, errs.NewInternalError("unable to parse user session", err)
 	}
 	return user, nil
-}
-
-func (uc *authUseCase) SendMagicLink(email string, withReset bool) error {
-	user, err := uc.userRepo.GetOneByEmail(email)
-	if err != nil {
-		return errs.NewBadRequestError("invalid email", err)
-	}
-	if user.Active == false {
-		return errs.NewForbiddenError("inactive user", nil)
-	}
-	token := shared.Utils.Auth.CreateToken("zml", user.ID, uc.toolkit.Conf.GetString("app.secret"))
-	ttl := time.Second * time.Duration(uc.toolkit.Conf.GetInt("app.auth.magicLinkTTL"))
-	if err = uc.toolkit.Cache.Set([]string{"account", "auth", "user", "magiclinks", token}, []byte(user.ID), ttl); err != nil {
-		return errs.NewInternalError("unable to create magic link", err)
-	}
-	msg := messages.MagicLinkMessage{
-		Email:     email,
-		Name:      user.Name,
-		Token:     token,
-		Timestamp: time.Now(),
-		WithReset: withReset,
-	}
-
-	return uc.toolkit.PubSub.Publish(&msg)
-}
-
-func (uc *authUseCase) AuthenticateWithMagicLink(magiclinkToken string) (token string, user *UserResponse, err error) {
-	userId, err := uc.toolkit.Cache.Get([]string{"account", "auth", "user", "magiclinks", magiclinkToken})
-	if err != nil {
-		return "", nil, errs.NewUnauthorizedError("invalid or expired magic link", err)
-	}
-	userModel, err := uc.userRepo.GetOneByID(string(userId))
-	if err != nil {
-		return "", nil, errs.NewInternalError("unable to get user", err)
-	}
-	return uc.createUserSession(userModel)
 }
 
 func (uc *authUseCase) AuthenticateWorkspaceByApiKey(apiKey string) (id string, err error) {
@@ -150,4 +138,34 @@ func (uc *authUseCase) AuthenticateWorkspaceByApiKey(apiKey string) (id string, 
 		return "", errs.NewInternalError("unable to create workspace session", err)
 	}
 	return workspace.ID, nil
+}
+
+func (uc *authUseCase) RevokeToken(token string) (err error) {
+	if err = uc.toolkit.Cache.Delete([]string{"account", "auth", "user", "tokens", token}); err != nil {
+		return errs.NewInternalError("unable to revoke token", err)
+	}
+	return nil
+}
+
+func (uc *authUseCase) RevokeAllUserTokens(userID string) (err error) {
+	tokens, err := uc.toolkit.Cache.Keys([]string{"account", "auth", "user", "tokens"})
+	if err != nil {
+		return errs.NewInternalError("unable to revoke tokens", err)
+	}
+	for _, token := range tokens {
+		userJson, err := uc.toolkit.Cache.Get([]string{"account", "auth", "user", "tokens", token})
+		if err != nil {
+			continue
+		}
+		var user UserStruct
+		if err = json.Unmarshal(userJson, &user); err != nil {
+			continue
+		}
+		if user.ID == userID {
+			if err = uc.toolkit.Cache.Delete([]string{"account", "auth", "user", "tokens", token}); err != nil {
+				return errs.NewInternalError("unable to revoke token", err)
+			}
+		}
+	}
+	return nil
 }
