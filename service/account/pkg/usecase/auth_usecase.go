@@ -13,7 +13,7 @@ import (
 
 type AuthUseCase interface {
 	AuthenticateUserByEmailPassword(email, password string) (token string, user *UserStruct, err error)
-	CreateAndSendOTP(target, value string) (err error)
+	CreateAndSendOTP(target, value string) (maxAge time.Duration, err error)
 	VerifyOTP(expectedVal, otp string) (err error)
 	AuthenticateToken(token string) (user *UserStruct, err error)
 	AuthenticateWorkspaceByApiKey(apiKey string) (id string, err error)
@@ -75,15 +75,15 @@ func (uc *authUseCase) AuthenticateUserByEmailPassword(email, password string) (
 	return uc.createUserSession(userModel)
 }
 
-func (uc *authUseCase) CreateAndSendOTP(target, value string) (err error) {
+func (uc *authUseCase) CreateAndSendOTP(target, value string) (maxAge time.Duration, err error) {
 	otpNum, err := shared.Utils.Numbers.GenerateRandomDigits(6)
 	if err != nil {
-		return errs.NewInternalError("Unable to create otp", err)
+		return 0, errs.NewInternalError("Unable to create otp", err)
 	}
 	otp := strconv.Itoa(otpNum)
 	ttl := time.Duration(uc.toolkit.Conf.GetInt("app.auth.otpTTL"))
 	if err = uc.toolkit.Cache.Set([]string{"account", "auth", "otp", otp}, []byte(value), ttl); err != nil {
-		return errs.NewInternalError("unable to create otp", err)
+		return 0, errs.NewInternalError("unable to create otp", err)
 	}
 	if err := uc.toolkit.PubSub.Publish(&messages.AuthOTPCreated{
 		Value:     value,
@@ -92,9 +92,9 @@ func (uc *authUseCase) CreateAndSendOTP(target, value string) (err error) {
 		Ttl:       ttl,
 		Timestamp: time.Now(),
 	}); err != nil {
-		return errs.NewInternalError("Unable to publish otp created message", err)
+		return 0, errs.NewInternalError("Unable to publish otp created message", err)
 	}
-	return nil
+	return ttl, nil
 }
 
 func (uc *authUseCase) VerifyOTP(expectedVal, otp string) (err error) {
@@ -127,14 +127,14 @@ func (uc *authUseCase) AuthenticateWorkspaceByApiKey(apiKey string) (id string, 
 	if ok := shared.Utils.Auth.ValidateToken(apiKey, secret); !ok {
 		return "", errs.NewBadRequestError("invalid api key", nil)
 	}
-	if resp, err := uc.toolkit.Cache.Get([]string{"account", "auth", "workspace", "apikeys", apiKey}); err == nil {
+	if resp, err := uc.toolkit.Cache.Get([]string{"account", "auth", "workspace", "tokens", apiKey}); err == nil {
 		return string(resp), nil
 	}
 	workspace, err := uc.wrkRepo.GetOneByApiKey(apiKey)
 	if err != nil {
 		return "", errs.NewUnauthorizedError("invalid api key", err)
 	}
-	if err = uc.toolkit.Cache.Set([]string{"account", "auth", "workspace", "apikeys", apiKey}, []byte(workspace.ID), time.Second*time.Duration(uc.toolkit.Conf.GetInt("app.auth.apiKeyTTL"))); err != nil {
+	if err = uc.toolkit.Cache.Set([]string{"account", "auth", "workspace", "tokens", apiKey}, []byte(workspace.ID), time.Second*time.Duration(uc.toolkit.Conf.GetInt("app.auth.apiKeyTTL"))); err != nil {
 		return "", errs.NewInternalError("unable to create workspace session", err)
 	}
 	return workspace.ID, nil

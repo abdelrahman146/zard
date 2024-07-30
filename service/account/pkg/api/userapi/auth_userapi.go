@@ -4,41 +4,40 @@ import (
 	"github.com/abdelrahman146/zard/service/account/pkg/usecase"
 	"github.com/abdelrahman146/zard/shared"
 	"github.com/abdelrahman146/zard/shared/errs"
-	"github.com/abdelrahman146/zard/shared/logger"
 	"github.com/gofiber/fiber/v2"
 )
 
 type AuthUserApi interface {
-	Setup(app *fiber.App) error
+	Setup(app *fiber.App)
 	LoginWithEmailAndPassword(ctx *fiber.Ctx) error
 	Logout(ctx *fiber.Ctx) error
 	GenerateOTPForEmail(ctx *fiber.Ctx) error
-	GenerateOTPForPhone(ctx *fiber.Ctx) error
 	VerifyOTP(ctx *fiber.Ctx) error
 	LogoutFromAllUserSessions(ctx *fiber.Ctx) error
+	GetUserSession(ctx *fiber.Ctx) error
 }
 
-func NewAuthUserApi(app *fiber.App, toolkit shared.Toolkit, auth usecase.AuthUseCase, user usecase.UserUseCase) {
+func NewAuthUserApi(app *fiber.App, toolkit shared.Toolkit, auth usecase.AuthUseCase) {
 	api := &authUserApi{
 		toolkit: toolkit,
 		auth:    auth,
-		user:    user,
 	}
-	if err := api.Setup(app); err != nil {
-		logger.GetLogger().Panic("failed to setup auth user api", logger.Field("error", err))
-	}
+	api.SetupV1(app)
 }
 
 type authUserApi struct {
 	toolkit shared.Toolkit
 	auth    usecase.AuthUseCase
-	user    usecase.UserUseCase
 }
 
-func (api *authUserApi) Setup(app *fiber.App) error {
-	group := app.Group("/auth")
-	group.Post("/login", api.LoginWithEmailAndPassword)
-	return nil
+func (api *authUserApi) SetupV1(app *fiber.App) {
+	v1group := app.Group("/v1/auth")
+	v1group.Get("/user", shared.Api.Auth.AuthorizeUserMiddleware(api.toolkit), api.GetUserSession)
+	v1group.Post("/login", api.LoginWithEmailAndPassword)
+	v1group.Post("/otp/email", api.GenerateOTPForEmail)
+	v1group.Post("/otp/verify", api.VerifyOTP)
+	v1group.Post("/logout", shared.Api.Auth.AuthorizeUserMiddleware(api.toolkit), api.Logout)
+	v1group.Post("/logout/all", shared.Api.Auth.AuthorizeUserMiddleware(api.toolkit), api.LogoutFromAllUserSessions)
 }
 
 func (api *authUserApi) LoginWithEmailAndPassword(ctx *fiber.Ctx) error {
@@ -67,13 +66,12 @@ func (api *authUserApi) LoginWithEmailAndPassword(ctx *fiber.Ctx) error {
 }
 
 func (api *authUserApi) Logout(ctx *fiber.Ctx) error {
-	ctx.ClearCookie("token")
 	token := ctx.Cookies("token")
+	ctx.ClearCookie("token")
 	if err := api.auth.RevokeToken(token); err != nil {
 		return err
 	}
-	resp := shared.Api.Response.NewSuccessResponse(nil)
-	return ctx.Status(fiber.StatusOK).JSON(resp)
+	return ctx.Status(fiber.StatusOK).JSON(shared.Api.Response.NewSuccessResponse(nil))
 }
 
 func (api *authUserApi) GenerateOTPForEmail(ctx *fiber.Ctx) error {
@@ -106,4 +104,23 @@ func (api *authUserApi) VerifyOTP(ctx *fiber.Ctx) error {
 	}
 	resp := shared.Api.Response.NewSuccessResponse(nil)
 	return ctx.Status(fiber.StatusOK).JSON(resp)
+}
+
+func (api *authUserApi) LogoutFromAllUserSessions(ctx *fiber.Ctx) error {
+	user, err := shared.Api.Auth.GetUserFromContext(ctx.UserContext())
+	if err != nil {
+		return err
+	}
+	if err := api.auth.RevokeAllUserTokens(user.ID); err != nil {
+		return err
+	}
+	return ctx.Status(fiber.StatusOK).JSON(shared.Api.Response.NewSuccessResponse(nil))
+}
+
+func (api *authUserApi) GetUserSession(ctx *fiber.Ctx) error {
+	user, err := shared.Api.Auth.GetUserFromContext(ctx.UserContext())
+	if err != nil {
+		return err
+	}
+	return ctx.Status(fiber.StatusOK).JSON(shared.Api.Response.NewSuccessResponse(user))
 }
