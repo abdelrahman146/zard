@@ -11,7 +11,7 @@ type UserCreatedMessage struct {
 }
 
 func (m *UserCreatedMessage) Stream() string {
-	return "account"
+	return ""
 }
 
 func (m *UserCreatedMessage) Subject() string {

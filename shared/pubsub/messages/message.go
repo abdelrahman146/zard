@@ -6,4 +6,4 @@ type Message interface {
 	Consumer(group string) string
 }
 
-var Messages = []Message{&NewActivity{}}
+var Messages = []Message{&AuthOTPCreated{}, &UserCreatedMessage{}}

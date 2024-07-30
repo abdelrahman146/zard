@@ -1,6 +1,7 @@
 package shared
 
 import (
+	"github.com/abdelrahman146/zard/shared/api"
 	"github.com/abdelrahman146/zard/shared/cache"
 	"github.com/abdelrahman146/zard/shared/config"
 	"github.com/abdelrahman146/zard/shared/pubsub"
@@ -10,6 +11,7 @@ import (
 )
 
 var Utils = utils.Utils
+var Api = api.Api
 
 type Toolkit struct {
 	Rpc       rpc.RPC

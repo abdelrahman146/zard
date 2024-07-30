@@ -11,7 +11,7 @@ type AuthOTPCreated struct {
 }
 
 func (a *AuthOTPCreated) Stream() string {
-	return "account"
+	return ""
 }
 
 func (a *AuthOTPCreated) Subject() string {
