@@ -5,6 +5,7 @@ import "time"
 type AuthOTPCreated struct {
 	Value     string        `json:"value"`
 	Target    string        `json:"target"`
+	Reason    string        `json:"reason"`
 	Otp       string        `json:"otp"`
 	Ttl       time.Duration `json:"ttl"`
 	Timestamp time.Time     `json:"timestamp"`

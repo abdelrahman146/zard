@@ -13,7 +13,7 @@ import (
 
 type AuthUseCase interface {
 	AuthenticateUserByEmailPassword(email, password string) (token string, user *UserStruct, err error)
-	CreateAndSendOTP(target, value string) (maxAge time.Duration, err error)
+	CreateAndSendOTP(target, reason, value string) (maxAge time.Duration, err error)
 	VerifyOTP(expectedVal, otp string) (err error)
 	AuthenticateToken(token string) (user *UserStruct, err error)
 	AuthenticateWorkspaceByApiKey(apiKey string) (id string, err error)
@@ -75,7 +75,7 @@ func (uc *authUseCase) AuthenticateUserByEmailPassword(email, password string) (
 	return uc.createUserSession(userModel)
 }
 
-func (uc *authUseCase) CreateAndSendOTP(target, value string) (maxAge time.Duration, err error) {
+func (uc *authUseCase) CreateAndSendOTP(target, reason, value string) (maxAge time.Duration, err error) {
 	otpNum, err := shared.Utils.Numbers.GenerateRandomDigits(6)
 	if err != nil {
 		return 0, errs.NewInternalError("Unable to create otp", err)
@@ -88,6 +88,7 @@ func (uc *authUseCase) CreateAndSendOTP(target, value string) (maxAge time.Durat
 	if err := uc.toolkit.PubSub.Publish(&messages.AuthOTPCreated{
 		Value:     value,
 		Target:    target,
+		Reason:    reason,
 		Otp:       otp,
 		Ttl:       ttl,
 		Timestamp: time.Now(),

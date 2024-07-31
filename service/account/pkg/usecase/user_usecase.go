@@ -70,6 +70,16 @@ func (uc *userUseCase) CreateUser(userDto *CreateUserStruct) (*UserStruct, error
 		fields := uc.toolkit.Validator.GetValidationErrors(err)
 		return nil, errs.NewValidationError("invalid user data", fields)
 	}
+	if userDto.Email != "" {
+		if user, _ := uc.userRepo.GetOneByEmail(userDto.Email); user != nil {
+			return nil, errs.NewConflictError("email already exists", nil)
+		}
+	}
+	if userDto.Phone != nil || *userDto.Phone != "" {
+		if user, _ := uc.userRepo.GetOneByPhone(*userDto.Phone); user != nil {
+			return nil, errs.NewConflictError("phone already exists", nil)
+		}
+	}
 	user := &model.User{
 		Name:            userDto.Name,
 		Email:           userDto.Email,

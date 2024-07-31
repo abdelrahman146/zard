@@ -17,7 +17,7 @@ type AuthUserApi interface {
 	GetUserSession(ctx *fiber.Ctx) error
 }
 
-func NewAuthUserApi(app *fiber.App, toolkit shared.Toolkit, auth usecase.AuthUseCase) {
+func NewAuthUserApi(app *fiber.App, toolkit *shared.Toolkit, auth usecase.AuthUseCase) {
 	api := &authUserApi{
 		toolkit: toolkit,
 		auth:    auth,
@@ -26,7 +26,7 @@ func NewAuthUserApi(app *fiber.App, toolkit shared.Toolkit, auth usecase.AuthUse
 }
 
 type authUserApi struct {
-	toolkit shared.Toolkit
+	toolkit *shared.Toolkit
 	auth    usecase.AuthUseCase
 }
 
@@ -43,7 +43,7 @@ func (api *authUserApi) SetupV1(app *fiber.App) {
 func (api *authUserApi) LoginWithEmailAndPassword(ctx *fiber.Ctx) error {
 	body := &LoginWithEmailAndPasswordRequest{}
 	if err := ctx.BodyParser(body); err != nil {
-		return errs.NewBadRequestError("Request body is not provided", err)
+		return errs.NewBadRequestError("Request body is not provided or invalid", err)
 	}
 	if err := api.toolkit.Validator.ValidateStruct(body); err != nil {
 		fields := api.toolkit.Validator.GetValidationErrors(err)
@@ -77,23 +77,24 @@ func (api *authUserApi) Logout(ctx *fiber.Ctx) error {
 func (api *authUserApi) GenerateOTPForEmail(ctx *fiber.Ctx) error {
 	body := &GenerateOTPForEmailRequest{}
 	if err := ctx.BodyParser(body); err != nil {
-		return errs.NewBadRequestError("Request body is not provided", err)
+		return errs.NewBadRequestError("Request body is not provided or invalid", err)
 	}
 	if err := api.toolkit.Validator.ValidateStruct(body); err != nil {
 		fields := api.toolkit.Validator.GetValidationErrors(err)
 		return errs.NewValidationError("Invalid request body", fields)
 	}
-	if err := api.auth.CreateAndSendOTP("email", body.Email); err != nil {
+	maxAge, err := api.auth.CreateAndSendOTP("email", "confirm", body.Email)
+	if err != nil {
 		return err
 	}
-	resp := shared.Api.Response.NewSuccessResponse(nil)
+	resp := shared.Api.Response.NewSuccessResponse(fiber.Map{"maxAge": maxAge})
 	return ctx.Status(fiber.StatusOK).JSON(resp)
 }
 
 func (api *authUserApi) VerifyOTP(ctx *fiber.Ctx) error {
 	body := &VerifyOTPForEmailRequest{}
 	if err := ctx.BodyParser(body); err != nil {
-		return errs.NewBadRequestError("Request body is not provided", err)
+		return errs.NewBadRequestError("Request body is not provided or invalid", err)
 	}
 	if err := api.toolkit.Validator.ValidateStruct(body); err != nil {
 		fields := api.toolkit.Validator.GetValidationErrors(err)

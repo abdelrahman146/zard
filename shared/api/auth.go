@@ -12,7 +12,7 @@ import (
 
 type Auth struct{}
 
-func Authorize(ctx context.Context, tokenOwner string, token string, toolkit shared.Toolkit) (context.Context, error) {
+func Authorize(ctx context.Context, tokenOwner string, token string, toolkit *shared.Toolkit) (context.Context, error) {
 	if token == "" {
 		return nil, errs.NewUnauthorizedError("token is not provided", nil)
 	}
@@ -24,7 +24,7 @@ func Authorize(ctx context.Context, tokenOwner string, token string, toolkit sha
 	return userContext, nil
 }
 
-func (Auth) AuthorizeUserMiddleware(toolkit shared.Toolkit) func(ctx *fiber.Ctx) error {
+func (Auth) AuthorizeUserMiddleware(toolkit *shared.Toolkit) func(ctx *fiber.Ctx) error {
 	return func(ctx *fiber.Ctx) error {
 		token := ctx.Cookies("token")
 		userContext, err := Authorize(ctx.UserContext(), "user", token, toolkit)
@@ -36,7 +36,7 @@ func (Auth) AuthorizeUserMiddleware(toolkit shared.Toolkit) func(ctx *fiber.Ctx)
 	}
 }
 
-func (Auth) AuthorizeWorkspaceMiddleware(toolkit shared.Toolkit) func(ctx *fiber.Ctx) error {
+func (Auth) AuthorizeWorkspaceMiddleware(toolkit *shared.Toolkit) func(ctx *fiber.Ctx) error {
 	return func(ctx *fiber.Ctx) error {
 		token := ctx.Cookies("token")
 		wsContext, err := Authorize(ctx.UserContext(), "workspace", token, toolkit)
@@ -48,7 +48,7 @@ func (Auth) AuthorizeWorkspaceMiddleware(toolkit shared.Toolkit) func(ctx *fiber
 	}
 }
 
-func (Auth) AuthorizeBackofficeMiddleware(toolkit shared.Toolkit) func(ctx *fiber.Ctx) error {
+func (Auth) AuthorizeBackofficeMiddleware(toolkit *shared.Toolkit) func(ctx *fiber.Ctx) error {
 	return func(ctx *fiber.Ctx) error {
 		token := ctx.Cookies("token")
 		boContext, err := Authorize(ctx.UserContext(), "backoffice", token, toolkit)

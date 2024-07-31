@@ -5,6 +5,13 @@ import (
 	"time"
 )
 
+type AccountUseCases struct {
+	AuthUseCase      AuthUseCase
+	OrgUseCase       OrgUseCase
+	UserUseCase      UserUseCase
+	WorkspaceUseCase WorkspaceUseCase
+}
+
 type CreateOrgStruct struct {
 	Name    string  `json:"name,omitempty" validate:"required,omitempty"`
 	Website *string `json:"website,omitempty"`
