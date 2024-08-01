@@ -13,6 +13,7 @@ import (
 
 type AuthUseCase interface {
 	AuthenticateUserByEmailPassword(email, password string) (token string, user *UserStruct, err error)
+	CreateUserToken(user *UserStruct) (token string, err error)
 	CreateAndSendOTP(target, reason, value string) (maxAge time.Duration, err error)
 	VerifyOTP(expectedVal, otp string) (err error)
 	AuthenticateToken(token string) (user *UserStruct, err error)
@@ -35,27 +36,30 @@ type authUseCase struct {
 	wrkRepo  repo.WorkspaceRepo
 }
 
-func (uc *authUseCase) createUserSession(userModel *model.User) (token string, user *UserStruct, err error) {
-	userJson, _ := json.Marshal(userModel)
-	token = shared.Utils.Auth.CreateToken("ztkn", userModel.ID, uc.toolkit.Conf.GetString("app.secret"))
+func (uc *authUseCase) ToUserStruct(user *model.User) *UserStruct {
+	return &UserStruct{
+		ID:              user.ID,
+		Name:            user.Name,
+		Email:           user.Email,
+		Phone:           user.Phone,
+		Active:          user.Active,
+		IsEmailVerified: user.IsEmailVerified,
+		IsPhoneVerified: user.IsPhoneVerified,
+		OrgID:           user.OrgID,
+		CreatedAt:       user.CreatedAt,
+		UpdatedAt:       user.UpdatedAt,
+		DeletedAt:       user.DeletedAt,
+	}
+}
+
+func (uc *authUseCase) CreateUserToken(user *UserStruct) (token string, err error) {
+	userJson, err := json.Marshal(user)
+	token = shared.Utils.Auth.CreateToken("ztkn", user.ID, uc.toolkit.Conf.GetString("app.secret"))
 	ttl := time.Second * time.Duration(uc.toolkit.Conf.GetInt("app.auth.tokenTTL"))
 	if err := uc.toolkit.Cache.Set([]string{"account", "auth", "user", "tokens", token}, userJson, ttl); err != nil {
-		return "", nil, errs.NewInternalError("unable to create user session", err)
+		return "", errs.NewInternalError("unable to create user session", err)
 	}
-	user = &UserStruct{
-		ID:              userModel.ID,
-		Name:            userModel.Name,
-		Email:           userModel.Email,
-		Phone:           userModel.Phone,
-		Active:          userModel.Active,
-		IsEmailVerified: userModel.IsEmailVerified,
-		IsPhoneVerified: userModel.IsPhoneVerified,
-		OrgID:           userModel.OrgID,
-		CreatedAt:       userModel.CreatedAt,
-		UpdatedAt:       userModel.UpdatedAt,
-		DeletedAt:       userModel.DeletedAt,
-	}
-	return token, user, nil
+	return token, nil
 }
 
 func (uc *authUseCase) AuthenticateUserByEmailPassword(email, password string) (token string, user *UserStruct, err error) {
@@ -72,17 +76,23 @@ func (uc *authUseCase) AuthenticateUserByEmailPassword(email, password string) (
 	if ok := shared.Utils.Auth.Compare(*userModel.Password, password, uc.toolkit.Conf.GetString("app.secret")); !ok {
 		return "", nil, errs.NewBadRequestError("invalid password", nil)
 	}
-	return uc.createUserSession(userModel)
+	user = uc.ToUserStruct(userModel)
+	token, err = uc.CreateUserToken(user)
+	return token, user, err
 }
 
 func (uc *authUseCase) CreateAndSendOTP(target, reason, value string) (maxAge time.Duration, err error) {
+	_, err = uc.toolkit.Cache.Get([]string{"account", "auth", "otp", value})
+	if err == nil {
+		return 0, errs.NewBadRequestError("otp already exists", nil)
+	}
 	otpNum, err := shared.Utils.Numbers.GenerateRandomDigits(6)
 	if err != nil {
 		return 0, errs.NewInternalError("Unable to create otp", err)
 	}
 	otp := strconv.Itoa(otpNum)
 	ttl := time.Duration(uc.toolkit.Conf.GetInt("app.auth.otpTTL"))
-	if err = uc.toolkit.Cache.Set([]string{"account", "auth", "otp", otp}, []byte(value), ttl); err != nil {
+	if err = uc.toolkit.Cache.Set([]string{"account", "auth", "otp", value}, []byte(otp), ttl); err != nil {
 		return 0, errs.NewInternalError("unable to create otp", err)
 	}
 	if err := uc.toolkit.PubSub.Publish(&messages.AuthOTPCreated{
@@ -99,14 +109,14 @@ func (uc *authUseCase) CreateAndSendOTP(target, reason, value string) (maxAge ti
 }
 
 func (uc *authUseCase) VerifyOTP(expectedVal, otp string) (err error) {
-	value, err := uc.toolkit.Cache.Get([]string{"account", "auth", "otp", otp})
+	res, err := uc.toolkit.Cache.Get([]string{"account", "auth", "otp", expectedVal})
 	if err != nil {
 		return errs.NewUnauthorizedError("invalid or expired otp", err)
 	}
-	if string(value) != expectedVal {
+	if string(res) != otp {
 		return errs.NewUnauthorizedError("invalid otp", nil)
 	}
-	if err = uc.toolkit.Cache.Delete([]string{"account", "auth", "otp", otp}); err != nil {
+	if err = uc.toolkit.Cache.Delete([]string{"account", "auth", "otp", expectedVal}); err != nil {
 		return errs.NewInternalError("unable to delete otp", err)
 	}
 	return nil

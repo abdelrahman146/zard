@@ -5,18 +5,18 @@ import (
 	"encoding/json"
 	"github.com/abdelrahman146/zard/service/account/pkg/model"
 	"github.com/abdelrahman146/zard/service/account/pkg/usecase"
-	"github.com/abdelrahman146/zard/shared"
+	"github.com/abdelrahman146/zard/shared/cache"
 	"github.com/abdelrahman146/zard/shared/errs"
 	"github.com/gofiber/fiber/v2"
 )
 
 type Auth struct{}
 
-func Authorize(ctx context.Context, tokenOwner string, token string, toolkit *shared.Toolkit) (context.Context, error) {
+func Authorize(ctx context.Context, tokenOwner string, token string, cache cache.Cache) (context.Context, error) {
 	if token == "" {
 		return nil, errs.NewUnauthorizedError("token is not provided", nil)
 	}
-	resp, err := toolkit.Cache.Get([]string{"account", "auth", tokenOwner, "tokens", token})
+	resp, err := cache.Get([]string{"account", "auth", tokenOwner, "tokens", token})
 	if err != nil {
 		return nil, errs.NewUnauthorizedError("invalid or expired token", err)
 	}
@@ -24,10 +24,20 @@ func Authorize(ctx context.Context, tokenOwner string, token string, toolkit *sh
 	return userContext, nil
 }
 
-func (Auth) AuthorizeUserMiddleware(toolkit *shared.Toolkit) func(ctx *fiber.Ctx) error {
+func (Auth) InitSession(ctx *fiber.Ctx, token string, maxAge int) {
+	ctx.Cookie(&fiber.Cookie{
+		Name:     "token",
+		Value:    token,
+		MaxAge:   maxAge,
+		Secure:   true,
+		HTTPOnly: true,
+	})
+}
+
+func (Auth) AuthorizeUserMiddleware(cache cache.Cache) func(ctx *fiber.Ctx) error {
 	return func(ctx *fiber.Ctx) error {
 		token := ctx.Cookies("token")
-		userContext, err := Authorize(ctx.UserContext(), "user", token, toolkit)
+		userContext, err := Authorize(ctx.UserContext(), "user", token, cache)
 		if err != nil {
 			return err
 		}
@@ -36,10 +46,11 @@ func (Auth) AuthorizeUserMiddleware(toolkit *shared.Toolkit) func(ctx *fiber.Ctx
 	}
 }
 
-func (Auth) AuthorizeWorkspaceMiddleware(toolkit *shared.Toolkit) func(ctx *fiber.Ctx) error {
+func (Auth) AuthorizeWorkspaceMiddleware(cache cache.Cache) func(ctx *fiber.Ctx) error {
 	return func(ctx *fiber.Ctx) error {
 		token := ctx.Cookies("token")
-		wsContext, err := Authorize(ctx.UserContext(), "workspace", token, toolkit)
+
+		wsContext, err := Authorize(ctx.UserContext(), "workspace", token, cache)
 		if err != nil {
 			return err
 		}
@@ -48,10 +59,10 @@ func (Auth) AuthorizeWorkspaceMiddleware(toolkit *shared.Toolkit) func(ctx *fibe
 	}
 }
 
-func (Auth) AuthorizeBackofficeMiddleware(toolkit *shared.Toolkit) func(ctx *fiber.Ctx) error {
+func (Auth) AuthorizeBackofficeMiddleware(cache cache.Cache) func(ctx *fiber.Ctx) error {
 	return func(ctx *fiber.Ctx) error {
 		token := ctx.Cookies("token")
-		boContext, err := Authorize(ctx.UserContext(), "backoffice", token, toolkit)
+		boContext, err := Authorize(ctx.UserContext(), "backoffice", token, cache)
 		if err != nil {
 			return err
 		}
@@ -63,7 +74,7 @@ func (Auth) AuthorizeBackofficeMiddleware(toolkit *shared.Toolkit) func(ctx *fib
 func (Auth) GetUserFromContext(ctx context.Context) (user *usecase.UserStruct, err error) {
 	bytes, ok := ctx.Value("user").([]byte)
 	if !ok {
-		return nil, errs.NewInternalError("unable to parse user session", nil)
+		return nil, errs.NewUnauthorizedError("UnAuthorized", nil)
 	}
 	user = &usecase.UserStruct{}
 	if err = json.Unmarshal(bytes, user); err != nil {

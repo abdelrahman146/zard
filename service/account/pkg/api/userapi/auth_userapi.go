@@ -32,12 +32,13 @@ type authUserApi struct {
 
 func (api *authUserApi) SetupV1(app *fiber.App) {
 	v1group := app.Group("/v1/auth")
-	v1group.Get("/user", shared.Api.Auth.AuthorizeUserMiddleware(api.toolkit), api.GetUserSession)
+	cache := api.toolkit.Cache
+	v1group.Get("/user", shared.Api.Auth.AuthorizeUserMiddleware(cache), api.GetUserSession)
 	v1group.Post("/login", api.LoginWithEmailAndPassword)
 	v1group.Post("/otp/email", api.GenerateOTPForEmail)
 	v1group.Post("/otp/verify", api.VerifyOTP)
-	v1group.Post("/logout", shared.Api.Auth.AuthorizeUserMiddleware(api.toolkit), api.Logout)
-	v1group.Post("/logout/all", shared.Api.Auth.AuthorizeUserMiddleware(api.toolkit), api.LogoutFromAllUserSessions)
+	v1group.Post("/logout", shared.Api.Auth.AuthorizeUserMiddleware(cache), api.Logout)
+	v1group.Post("/logout/all", shared.Api.Auth.AuthorizeUserMiddleware(cache), api.LogoutFromAllUserSessions)
 }
 
 func (api *authUserApi) LoginWithEmailAndPassword(ctx *fiber.Ctx) error {
@@ -54,13 +55,7 @@ func (api *authUserApi) LoginWithEmailAndPassword(ctx *fiber.Ctx) error {
 		return err
 	}
 	maxAge := api.toolkit.Conf.GetInt("app.auth.tokenTTL")
-	ctx.Cookie(&fiber.Cookie{
-		Name:     "token",
-		Value:    token,
-		MaxAge:   maxAge,
-		Secure:   true,
-		HTTPOnly: true,
-	})
+	shared.Api.Auth.InitSession(ctx, token, maxAge)
 	resp := shared.Api.Response.NewSuccessResponse(user)
 	return ctx.Status(fiber.StatusOK).JSON(resp)
 }
